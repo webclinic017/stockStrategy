@@ -177,8 +177,8 @@ class GridTradingStrategy(bt.Strategy):
         # 清仓逻辑
         current_date = self.datas[0].datetime.date(0)
         indicator = self.dtload.get_by_date(current_date.isoformat())
-        # if indicator is not None and not pd.isnull(indicator.最高10):
-        if self.profit_ratio>=0.5 and self.profit_value >= 5000:
+        # if indicator is not None and not pd.isnull(indicator.最高30):
+        if self.profit_ratio>=0.6 and self.profit_value >= 6000:
             self.log("执行清仓，清仓时持仓收益率为 %.2f，收益金额为 %.2f" % (self.profit_ratio, self.profit_value))
             self.order_target_percent(target=0)
         # # # 减仓逻辑

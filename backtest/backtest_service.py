@@ -29,10 +29,18 @@ def back_test_service(code,indicator):
         dt = dt_loader.load_data('sh512710')
     elif code == '证券公司':
         dt = dt_loader.load_data('sh512880')
+    elif code == '有色金属(申万)':
+        dt = dt_loader.load_data('sh512400')
+    elif code == '食品饮料(申万)':
+        dt = dt_loader.load_data('sz159928')
+    elif code == '中证银行':
+        dt = dt_loader.load_data('sh512820')
+
+
     cerebro.addstrategy(GridTradingStrategy,code=code,indicator=indicator)
     # Datas are in a subfolder of the samples. Need to find where the script is
     # because it could have been called from anywhere
-    start_date = datetime(2015, 1, 28)
+    # start_date = datetime(2015, 1, 28)
     start_date = datetime(2022, 10, 28)
 
     end_date = datetime.now()
