@@ -43,6 +43,10 @@ class GridTradingStrategy(bt.Strategy):
         self.stock_ratio =None
         self.has_clear = False
         self.order_is_grid = False
+        self.time = 5.0
+        self.day=0
+        self.stockMoney = 0
+        self.needClear = False
 
 
 
@@ -95,7 +99,8 @@ class GridTradingStrategy(bt.Strategy):
     def next(self):
         # Simply log the closing price of the series from the reference
         # self.log('Close, %.2f' % self.dataclose[0])
-        self.grid_wide = self.ATR*1.0
+        self.grid_wide = self.ATR*self.time
+        self.needClear=False
 
         # Check if an order is pending ... if yes, we cannot send a 2nd one
         if self.order:
@@ -109,11 +114,15 @@ class GridTradingStrategy(bt.Strategy):
             self.calculate_position_status()
             # 是否触发清仓检查
             self.clear_or_decrease_check()
-            # 月定投执行
-            self.buy_per_month()
-            # 网格交易执行
-            self.buy_grid_trading()
+            if (not self.needClear):
+                # 月定投执行
+                self.buy_per_month()
+                # 网格交易执行
+                self.buy_grid_trading()
 
+
+        self.day = self.day+1
+        self.stockMoney = self.stockMoney+self.broker.getvalue()-self.broker.get_cash()
     def calculate_position_status(self):
         current_price = self.dataclose[0]
         position = self.position
@@ -132,7 +141,7 @@ class GridTradingStrategy(bt.Strategy):
             self.last_month = str(current_date)[:-3]
             # 现价<成本价-1ATR，加仓200
             if(self.position.price-self.ATR > price):
-                self.buy_stock(money=200)
+                self.buy_stock(money=200*self.time)
 
 
     # 开仓逻辑
@@ -141,8 +150,8 @@ class GridTradingStrategy(bt.Strategy):
         current_date = self.datas[0].datetime.date(0)
         indicator = self.dtload.get_by_date(current_date.isoformat())
         if indicator is not None and not pd.isnull(indicator.最低30):
-            self.buy_stock(money=10000)
-            self.log("开始建仓，买入金额 %.2f" % (10000))
+            self.buy_stock(money=5000)
+            self.log("开始建仓，买入金额 %.2f" % (5000))
 
     # 网格交易逻辑
     def buy_grid_trading(self):
@@ -155,21 +164,20 @@ class GridTradingStrategy(bt.Strategy):
         if (can_trigger_first_grid and len(self.grid_price_deque) == 0) or (len(self.grid_price_deque) !=0 and current_price <= self.grid_price_deque[0]-self.grid_wide):
             self.log("触发网格买入")
             if(self.profit_ratio<0):
-                self.buy_stock(800)
+                self.buy_stock(800*self.time)
             else:
-                self.buy_stock(300)
+                self.buy_stock(300*self.time)
             self.order_is_grid = True
 
         #触发卖出，当前价格>=上一次网格买入价格+网格宽度
         if len(self.grid_price_deque)!=0 and current_price >= self.grid_price_deque[0] + self.grid_wide and position.size > 0:
-
-            if self.profit_ratio < 0:
-                self.sell_stock(300)
-            elif self.profit_ratio<= 0.2:
-                self.sell_stock(600)
-            else:
-                self.sell_stock(800)
             self.log("触发网格卖出")
+            if self.profit_ratio < 0:
+                self.sell_stock(300*self.time)
+            elif self.profit_ratio<= 0.2:
+                self.sell_stock(600*self.time)
+            else:
+                self.sell_stock(800*self.time)
             self.order_is_grid = True
 
     # 清仓减仓逻辑
@@ -180,21 +188,22 @@ class GridTradingStrategy(bt.Strategy):
         # if indicator is not None and not pd.isnull(indicator.最高30):
         if self.profit_ratio>=0.6 and self.profit_value >= 6000:
             self.log("执行清仓，清仓时持仓收益率为 %.2f，收益金额为 %.2f" % (self.profit_ratio, self.profit_value))
+            self.needClear = True
             self.order_target_percent(target=0)
-        # # # 减仓逻辑
+
         # if(self.profit_ratio >= 0.2 and self.stock_ratio > 0.5):
         #     self.log("执行减仓，减仓时持仓收益率为 %.2f，收益金额为 %.2f" % (self.profit_ratio, self.profit_value))
         #     self.sell_stock(200)
 
     # 是否能触发开启网格交易
     def need_trigger_first_grid(self):
-        # 触发网格逻辑,市盈率小于等于平均值做网格
-        current_date = self.datas[0].datetime.date(0)
-        indicator = self.dtload.get_by_date(current_date.isoformat())
-        if indicator is None:
-            return False
-        if pd.isnull(indicator.最低30):
-            return False
+        # # 触发网格逻辑,市盈率小于等于平均值做网格
+        # current_date = self.datas[0].datetime.date(0)
+        # indicator = self.dtload.get_by_date(current_date.isoformat())
+        # if indicator is None:
+        #     return False
+        # if pd.isnull(indicator.最低30):
+        #     return False
         return True
 
 
@@ -211,7 +220,7 @@ class GridTradingStrategy(bt.Strategy):
         self.order = self.sell(size=size)
 
     def stop(self):
-        self.log('Ending Value %.2f,start value %.2f,profit is %.2f' % (self.broker.getvalue(),self.broker.startingcash,self.profit_value))
+        self.log('Ending Value %.2f,start value %.2f,profit is %.2f,aveCost is %.2f,aveRevenueRatio is %.2f' % (self.broker.getvalue(),self.broker.startingcash,self.profit_value,self.stockMoney/self.day,(self.profit_value/(self.stockMoney/self.day))/(self.day/365)))
 
 
 
