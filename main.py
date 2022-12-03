@@ -15,10 +15,6 @@ if __name__ == '__main__':
     # stock = Stock('中证银行', 'sh512820', '市盈率')
     # stock = Stock('中证红利', 'sh515180', '市盈率')
     stock = Stock('全指医药', 'sz159938', '市盈率')
-
-
-
-
     back_test_service(stock)
 
 
