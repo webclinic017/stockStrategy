@@ -7,7 +7,7 @@ def get_history_index_valuation(code,indicator):
     index_value_hist_funddb_df = ak.index_value_hist_funddb(symbol=code, indicator=indicator)
     index_value_hist_funddb_df.index=pd.to_datetime(index_value_hist_funddb_df.日期)
     # pd.set_option('display.max_rows',None)
-    # print(index_value_hist_funddb_df)
+    print(index_value_hist_funddb_df)
     return index_value_hist_funddb_df
 
 
