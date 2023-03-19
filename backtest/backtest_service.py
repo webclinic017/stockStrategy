@@ -34,10 +34,10 @@ def back_test_service(stock):
     # Datas are in a subfolder of the samples. Need to find where the script is
     # because it could have been called from anywhere
     # start_date = datetime(2015, 1, 28)
-    start_date = datetime(2016, 3, 16)
+    start_date = datetime(2017, 10, 27)
 
     end_date = datetime.now()
-    end_date = datetime(2022, 10, 27)
+    # end_date = datetime(2022, 10, 27)
 
     # Create a Data Feed
     data = bt.feeds.PandasData(dataname=dt, fromdate=start_date, todate=end_date)

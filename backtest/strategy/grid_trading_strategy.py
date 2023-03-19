@@ -43,7 +43,7 @@ class GridTradingStrategy(bt.Strategy):
         self.stock_ratio =None
         self.has_clear = False
         self.order_is_grid = False
-        self.time = 5.0
+        self.time = 3.0
         self.day=0
         self.stockMoney = 0
         self.needClear = False
@@ -140,7 +140,8 @@ class GridTradingStrategy(bt.Strategy):
         if self.last_month is None or str(current_date)[:-3] > self.last_month:
             self.last_month = str(current_date)[:-3]
             # 现价<成本价-1ATR，加仓200
-            if(self.position.price-self.ATR > price):
+            # if(self.position.price-self.grid_wide > price):
+            if (self.position.price *0.95 >= price):
                 self.buy_stock(money=200*self.time)
 
 
@@ -161,7 +162,10 @@ class GridTradingStrategy(bt.Strategy):
         position = self.position
         self.log("当前持仓收益率%s,网格宽度%.4f,current_price:%s,position.price:%s" % (self.profit_ratio,self.grid_wide,current_price,position.price))
         # 触发买入,第一次触发网格买入或者当前价格<=上一次网格买入价格-网格宽度
-        if (can_trigger_first_grid and len(self.grid_price_deque) == 0) or (len(self.grid_price_deque) !=0 and current_price <= self.grid_price_deque[0]-self.grid_wide):
+        # if (can_trigger_first_grid and len(self.grid_price_deque) == 0) or (len(self.grid_price_deque) !=0 and current_price <= self.grid_price_deque[0]-self.grid_wide):
+        if (can_trigger_first_grid and len(self.grid_price_deque) == 0) or (
+                    len(self.grid_price_deque) != 0 and current_price <= self.grid_price_deque[0]*0.95):
+
             self.log("触发网格买入")
             if(self.profit_ratio<0):
                 self.buy_stock(800*self.time)
@@ -170,7 +174,10 @@ class GridTradingStrategy(bt.Strategy):
             self.order_is_grid = True
 
         #触发卖出，当前价格>=上一次网格买入价格+网格宽度
-        if len(self.grid_price_deque)!=0 and current_price >= self.grid_price_deque[0] + self.grid_wide and position.size > 0:
+        # if len(self.grid_price_deque)!=0 and current_price >= self.grid_price_deque[0] + self.grid_wide and position.size > 0:
+        if len(self.grid_price_deque) != 0 and current_price >= self.grid_price_deque[
+                0]*1.05 and position.size > 0:
+
             self.log("触发网格卖出")
             if self.profit_ratio < 0:
                 self.sell_stock(300*self.time)
