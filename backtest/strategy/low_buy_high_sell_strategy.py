@@ -8,7 +8,7 @@ import math
 
 
 
-class GridTradingStrategy(bt.Strategy):
+class LowBuyHighSell(bt.Strategy):
     params = (
         ('code', '沪深300'),
         ('indicator', '市盈率'),
@@ -46,10 +46,8 @@ class GridTradingStrategy(bt.Strategy):
         self.time = 5.0
         self.day=0
         self.stockMoney = 0
-        self.needClear = False
-
-
-
+        self.needClear = None
+        self.lastProfitRatio=None
 
     def notify_order(self, order):
         if order.status in [order.Submitted, order.Accepted]:
@@ -70,17 +68,11 @@ class GridTradingStrategy(bt.Strategy):
 
                 self.buyprice = order.executed.price
                 self.buycomm = order.executed.comm
-                if self.order_is_grid:
-                    self.grid_price_deque.appendleft(self.buyprice)
-                    self.order_is_grid = False
             else:  # Sell
                 self.log('SELL EXECUTED, Price: %.2f, Cost: %.2f, Comm %.2f' %
                          (order.executed.price,
                           order.executed.value,
                           order.executed.comm))
-                if self.order_is_grid:
-                    self.grid_price_deque.popleft()
-                    self.order_is_grid = False
             self.bar_executed = len(self)
 
         elif order.status in [order.Canceled, order.Margin, order.Rejected]:
@@ -118,7 +110,7 @@ class GridTradingStrategy(bt.Strategy):
                 # 月定投执行
                 self.buy_per_month()
                 # 网格交易执行
-                self.buy_grid_trading()
+                self.trade_logic()
 
 
         self.day = self.day+1
@@ -154,39 +146,52 @@ class GridTradingStrategy(bt.Strategy):
             self.log("开始建仓，买入金额 %.2f" % (10000))
 
     # 网格交易逻辑
-    def buy_grid_trading(self):
+    def trade_logic(self):
         current_price = self.dataclose[0]
-        # 判定是否可以开始第一次网格交易
-        can_trigger_first_grid = self.need_trigger_first_grid()
+        current_date = self.datas[0].datetime.date(0)
+
+        # 判定是否可以加仓
+        indicator_percentage = "other"
+        indicator = self.dtload.get_by_date(current_date.isoformat())
         position = self.position
-        self.log("当前持仓收益率%s,网格宽度%.4f,current_price:%s,position.price:%s" % (self.profit_ratio,self.grid_wide,current_price,position.price))
+
+        if indicator is not None and not pd.isnull(indicator.最低30):
+            indicator_percentage="30"
+        if indicator is not None and not pd.isnull(indicator.最低10):
+            indicator_percentage = "10"
+        if indicator is not None and not pd.isnull(indicator.最高30):
+            indicator_percentage = "70"
+        if indicator is not None and not pd.isnull(indicator.最高10):
+            indicator_percentage = "90"
+        self.log("当前持仓收益率%s,网格宽度%.4f,current_price:%s,position.price:%s,indicator_percentage:%s" % (
+                self.profit_ratio, self.grid_wide, current_price, position.price, indicator_percentage))
         # 触发买入,第一次触发网格买入或者当前价格<=上一次网格买入价格-网格宽度
-        if (can_trigger_first_grid and len(self.grid_price_deque) == 0) or (len(self.grid_price_deque) !=0 and current_price <= self.grid_price_deque[0]-self.grid_wide):
-            self.log("触发网格买入")
-            if(self.profit_ratio<0):
-                self.buy_stock(800*self.time)
-            else:
-                self.buy_stock(300*self.time)
-            self.order_is_grid = True
+        if(indicator_percentage == "30"):
+            if(self.profit_ratio<=-0.10):
+                self.buy_stock(2000)
+        if (indicator_percentage == "10"):
+            if (self.profit_ratio <= -0.10):
+                self.buy_stock(4000)
 
         #触发卖出，当前价格>=上一次网格买入价格+网格宽度
-        if len(self.grid_price_deque)!=0 and current_price >= self.grid_price_deque[0] + self.grid_wide and position.size > 0:
-            self.log("触发网格卖出")
-            if self.profit_ratio < 0:
-                self.sell_stock(300*self.time)
-            elif self.profit_ratio<= 0.2:
-                self.sell_stock(600*self.time)
-            else:
-                self.sell_stock(800*self.time)
-            self.order_is_grid = True
+        if (indicator_percentage == "70"):
+            if(self.lastProfitRatio is None):
+                self.order_target_percent(target=0.3)
+                self.lastProfitRatio = self.profit_ratio
+            if(self.lastProfitRatio is not None and self.profit_ratio-self.lastProfitRatio>=0.05):
+                self.sell_stock(1000)
+                self.lastProfitRatio = self.profit_ratio
+
+
+
 
     # 清仓减仓逻辑
     def clear_or_decrease_check(self):
         # 清仓逻辑
         current_date = self.datas[0].datetime.date(0)
         indicator = self.dtload.get_by_date(current_date.isoformat())
-        # if indicator is not None and not pd.isnull(indicator.最高30):
-        if self.profit_ratio>=0.6 and self.profit_value >= 6000:
+        if indicator is not None and not pd.isnull(indicator.最高10):
+        # if self.profit_ratio>=0.6 and self.profit_value >= 6000:
             self.log("执行清仓，清仓时持仓收益率为 %.2f，收益金额为 %.2f" % (self.profit_ratio, self.profit_value))
             self.needClear = True
             self.order_target_percent(target=0)

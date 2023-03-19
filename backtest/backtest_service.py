@@ -9,6 +9,8 @@ import backtest.dataloader as dt_loader
 from backtest.strategy.test_strategy import TestStrategy
 from backtest.strategy.turtle_strategy import (TurtleStrategy,TurtleSizer)
 from backtest.strategy.grid_trading_strategy import GridTradingStrategy
+from backtest.strategy.low_buy_high_sell_strategy import LowBuyHighSell
+
 
 
 
@@ -32,10 +34,10 @@ def back_test_service(stock):
     # Datas are in a subfolder of the samples. Need to find where the script is
     # because it could have been called from anywhere
     # start_date = datetime(2015, 1, 28)
-    start_date = datetime(2022, 11, 10)
+    start_date = datetime(2016, 3, 16)
 
     end_date = datetime.now()
-    # end_date = datetime(2022, 11, 19)
+    end_date = datetime(2022, 10, 27)
 
     # Create a Data Feed
     data = bt.feeds.PandasData(dataname=dt, fromdate=start_date, todate=end_date)
