@@ -23,6 +23,11 @@ def set_backtest():
     set_limit_mode('UNLIMITED')
     set_commission(commission_ratio=0.00005, min_commission =5.0)
 
+def before_trading_start(context, data):
+    log.info("当日持仓金额:%s,持仓收益率:%s,持仓收益%s"%(context.portfolio.positions_value,context.portfolio.returns,context.portfolio.pnl))
+    g.trade_per_month_flag={}
+
+
 # 网格及交易
 def handle_data(context, data):
     for security in g.security:
@@ -38,7 +43,9 @@ def trade(security,context, data):
         profit_ratio = position.last_sale_price/position.cost_basis-1
         profit_value = profit_ratio*position.cost_basis*position.amount
         open_trading(current_price,security,context,data)
-        grid_trade(security,profit_ratio,profit_value,current_price)
+        if position.amount>0:
+            buy_per_month(security,current_price,profit_ratio,profit_value,context)
+            grid_trade(security,profit_ratio,profit_value,current_price,context)
 
 # 开仓逻辑
 def open_trading(current_price,security,context, data):
@@ -56,10 +63,11 @@ def open_trading(current_price,security,context, data):
             g.open_dict[security]='Y'
             grid_price_deque.appendleft(current_price)
 
-def grid_trade(security,profit_ratio,profit_value,current_price):
+def grid_trade(security,profit_ratio,profit_value,current_price,context):
     grid_price_deque = g.grid_price_deque_dict[security]
+    cash = context.portfolio.cash
     # 触发买入,第一次触发网格买入或者当前价格<=上一次网格买入价格-网格宽度
-    if current_price <= grid_price_deque[0] * 0.95:
+    if current_price <= grid_price_deque[0] * 0.95 and cash>300:
         if (profit_ratio < 0):
             grid_trade_buy(current_price,security,4800,grid_price_deque)
         else:
@@ -88,3 +96,17 @@ def grid_trade_buy(current_price,security,amount,grid_price_deque):
                 grid_price_deque.appendleft(current_price)
 
 
+# 月定投逻辑
+def buy_per_month(security,current_price,profit_ratio,profit_value,context):
+    # 得到当天的时间,
+    current_date = context.blotter.current_dt
+    cash = context.portfolio.cash
+
+    # 如果当天是月初，开始定投
+    if g.trade_per_month_flag[security] is None and g.last_month is None or str(current_date)[:-3] > g.last_month:
+        g.last_month = str(current_date)[:-3]
+        # 现价<成本价-1ATR，加仓200
+        # if(self.position.price-self.grid_wide > price):
+        if (profit_ratio<-0.05 and cash>300):
+            order_value(security, 1200)
+            g.trade_per_month_flag[security] = "Y"
