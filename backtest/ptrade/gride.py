@@ -3,23 +3,37 @@ import logging
 import numpy as np
 import collections
 
+import pandas as pd
+import xcsc_tushare as xc
+import pickle
 
 def initialize(context):
     # 初始化此策略
     g.security = ['512480.SS','560880.SS','517090.SS','512880.SS','510310.SS','159952.SZ','512680.SS','513100.SS']
+    # g.sec_estimate_map = {'512480.SS':"",'560880.SS':"",
+    #                       '517090.SS':"",'512880.SS':"",
+    #                       '510310.SS':"",'159952.SZ':"",
+    #                       '512680.SS':"",'513100.SS':""}
+    g.sec_estimate_indicator = {}
+
     set_universe(g.security)
-    g.path = get_research_path() + "grid_strategy/griddata.txt"
-    log.info(g.path)
+
+    # xc.set_token('4d0cd91bc89c0e6883fe730fb5bebdca577879eedae349e2feb2acc9')
+    # pro = xc.pro_api(server='http://10.208.110.21:7172')
+    # df = pro.sw_index_daily(ts_code="801080.SI")
+    # log.info(df)
+
     g.grid_price_deque_dict = {}
     g.open_dict={}
     g.last_month=None
     g.atr_time = 2
+    g.atr_period=100
     for sec in g.security:
         g.open_dict[sec]="N"
         g.grid_price_deque_dict[sec] = collections.deque()
     g.is_trade_flag = is_trade()
     if g.is_trade_flag:
-        pass
+        init_grid(context)
     else:
         set_backtest()
 #设置回测条件
@@ -27,17 +41,31 @@ def set_backtest():
     set_limit_mode('UNLIMITED')
     set_commission(commission_ratio=0.00005, min_commission =5.0,type="ETF")
 
+def init_grid(context):
+    for sec in g.security:
+        sec_position = context.portfolio.positions[sec]
+        grid_deque = g.grid_price_deque_dict[sec]
+        if sec_position["amount"] > 0:
+            grid_deque.appendleft(sec_position.cost_basis)
+
 def before_trading_start(context, data):
     log.info("当日持仓金额:%s,持仓收益率:%s,持仓收益%s"%(context.portfolio.positions_value,context.portfolio.returns,context.portfolio.pnl))
     g.trade_per_month_flag={}
     g.atr_dict={}
+    current_date = context.blotter.current_dt
+    g.path = get_research_path() + "grid_strategy/griddata_%s.csv"%current_date
+    # with open(g.path, 'rb') as r:
+    #     deque = pickle.load(r)
+    #     log.info(deque)
     for sec in g.security:
         g.trade_per_month_flag[sec] = "N"
         # ATR for Grid
         cal_atr(sec)
+        # todo 指数市盈率
         #check 并且重置开仓标志位
-        # if context.portfolio.positions[sec].amount==0:
-        #     g.open_dict[sec] = "N"
+        if g.is_trade_flag is not True:
+            if context.portfolio.positions[sec].amount==0:
+                g.open_dict[sec] = "N"
     log.info("当日ATR数据"+ str(g.atr_dict))
 
 
@@ -61,8 +89,19 @@ def handle_data(context, data):
 #                 if len(grid_price_deque) == 0:
 #                     grid_price_deque.appendleft(trade["business_price"])
 
-# def after_trading_end(context, data):
-
+def after_trading_end(context, data):
+    log.info(g.grid_price_deque_dict)
+    grid_list=[]
+    for sec in g.grid_price_deque_dict.keys():
+        dic={}
+        dic["code"]=sec
+        list = []
+        for ele in g.grid_price_deque_dict[sec]:
+            list.append(str(ele))
+        dic["grid"]=",".join(list)
+        grid_list.append(dic)
+    pf = pd.DataFrame(grid_list, columns=["code", "grid"])
+    pf.to_csv(g.path, index=False)
 
 def trade(security,context, data):
     h = get_history(1, '1m', field=['close', 'volume'], security_list=security, fq='dypre', include=True)
@@ -121,10 +160,11 @@ def grid_trade_buy(current_price,security,amount,grid_price_deque):
     log.info(security + ":触发网格买入:"+str(amount))
     order_id = order_value(security, amount)
     #回测这里网格出入队列，交易用trade主推接口
-    if order_id is not None and g.is_trade_flag is not True:
+    if order_id is not None:
         order =get_order(order_id)[0]
         # log.info(order)
-        if order.status == "8":
+        if order.status == "8" or order.status == "7":
+            log.info(security + ":网格买入成功:" + str(amount))
             if amount>0:
                 grid_price_deque.appendleft(current_price)
             if amount<0:
@@ -149,11 +189,11 @@ def buy_per_month(security,current_price,cost_basis,profit_ratio,profit_value,co
             g.trade_per_month_flag[security] = "Y"
 
 def cal_atr(security):
-    h = get_history(15, '1d', field=['close', 'high', 'low'], security_list=security, fq='dypre', include=True)
+    h = get_history(g.atr_period+1, '1d', field=['close', 'high', 'low'], security_list=security, fq='dypre', include=True)
     close = h["close"].values
     high = h["high"].values
     low = h["low"].values
-    tr_list = [0 for _ in range(14)]
-    for i in range(1, 15):
+    tr_list = [0 for _ in range(g.atr_period)]
+    for i in range(1, g.atr_period+1):
         tr_list[i - 1] =max((high[i] - low[i]), abs(close[i - 1] - high[i]), abs(close[i - 1] - low[i]))
     g.atr_dict[security] = round(np.nanmean(tr_list), 3 )
