@@ -79,7 +79,7 @@ def init_grid(context):
         if len(before_grid)>0:
             before_grid_value_list = str(before_grid.iloc[0]).split(",")
             for grid in before_grid_value_list:
-                grid_deque.append(grid)
+                grid_deque.append(float(grid))
             g.have_init_grid[sec] = True
         if sec in context.portfolio.positions:
             sec_position = context.portfolio.positions[sec]
@@ -93,51 +93,52 @@ def handle_data(context, data):
     for security in g.security:
         trade(security,context, data)
 
-# def on_trade_response (context, trade_list):
-#     logging.info("网格买入成功:"+str(trade_list))
-#     for trade in trade_list:
-#         if trade.status == "8" or trade.status == "7":
-#             grid_price_deque = g.grid_price_deque_dict[trade["stock_code"]]
-#             # 买
-#             if trade["entrust_bs"]=="1":
-#                 grid_price_deque.appendleft(trade["business_price"])
-#             # 卖
-#             if trade["entrust_bs"]=="2":
-#                 grid_price_deque.popleft()
-#                 if len(grid_price_deque) == 0:
-#                     grid_price_deque.appendleft(trade["business_price"])
+def on_trade_response (context, trade_list):
+    logging.info("网格买入成功:"+str(trade_list))
+    for trade in trade_list:
+        if trade.status == "8" or trade.status == "7":
+            grid_price_deque = g.grid_price_deque_dict[trade["stock_code"]]
+            # 买
+            if trade["entrust_bs"]=="1":
+                grid_price_deque.appendleft(trade["business_price"])
+            # 卖
+            if trade["entrust_bs"]=="2":
+                grid_price_deque.popleft()
+                if len(grid_price_deque) == 0:
+                    grid_price_deque.appendleft(trade["business_price"])
 
 
 
 def trade(security,context, data):
     h = get_history(1, '1m', field=['close', 'volume'], security_list=security, fq='dypre', include=True)
+    position = get_position(security)
+    openorder = get_open_orders(security)
+
     #如果存在价格，交易
     if len(h['close'].values)>0:
         current_price = h['close'].values[0]
-        position = get_position(security)
-        profit_ratio = position.last_sale_price/position.cost_basis-1
-        profit_value = profit_ratio*position.cost_basis*position.amount
-        openorder = get_open_orders(security)
         # 交易模式手动建仓，回测自动开仓
         if g.is_trade_flag is False:
-            open_trading(current_price,security,context,data)
-        #如果有仓位且不存在未完成订单，做网格
+            open_trading(current_price, security, context, data)
+        # 如果有仓位且不存在未完成订单，做网格
         if position.amount>0 and len(openorder)==0:
-            # buy_per_month(security,current_price,position.cost_basis,profit_ratio,profit_value,context)
+            profit_ratio = position.last_sale_price/position.cost_basis-1
+            profit_value = profit_ratio*position.cost_basis*position.amount
+            buy_per_month(security,current_price,position.cost_basis,profit_ratio,profit_value,context)
             grid_trade(security,profit_ratio,profit_value,current_price,context)
 
-def after_trading_end(context, data):
-    grid_list=[]
-    for sec in g.grid_price_deque_dict.keys():
-        dic={}
-        dic["code"]=sec
-        list = []
-        for ele in g.grid_price_deque_dict[sec]:
-            list.append(str(ele))
-        dic["grid"]=",".join(list)
-        grid_list.append(dic)
-    pf = pd.DataFrame(grid_list, columns=["code", "grid"])
-    pf.to_csv(g.path, index=False)
+# def after_trading_end(context, data):
+#     grid_list=[]
+#     for sec in g.grid_price_deque_dict.keys():
+#         dic={}
+#         dic["code"]=sec
+#         list = []
+#         for ele in g.grid_price_deque_dict[sec]:
+#             list.append(str(ele))
+#         dic["grid"]=",".join(list)
+#         grid_list.append(dic)
+#     pf = pd.DataFrame(grid_list, columns=["code", "grid"])
+#     pf.to_csv(g.path, index=False)
 
 # 开仓逻辑
 def open_trading(current_price,security,context, data):
@@ -179,6 +180,7 @@ def grid_trade_buy(current_price,security,amount,grid_price_deque):
     log.info(security + ":触发网格买入:"+str(amount))
     position = get_position(security)
     num = int(amount/current_price)
+    num= num%100*100
     if num > position.amount:
         num = position.amount
     limit_price = current_price
@@ -208,19 +210,19 @@ def grid_trade_buy(current_price,security,amount,grid_price_deque):
 
 
 # 月定投逻辑
-# def buy_per_month(security,current_price,cost_basis,profit_ratio,profit_value,context):
-#     # 得到当天的时间,
-#     current_date = context.blotter.current_dt
-#     cash = context.portfolio.cash
-#
-#     # 如果当天是月初，开始定投
-#     if g.trade_per_month_flag[security] =="N" and (g.last_month is None or str(current_date)[:-12] > g.last_month):
-#         g.last_month = str(current_date)[:-12]
-#         # 现价<成本价-1ATR，加仓200
-#         if (cost_basis-current_price >= g.atr_dict[security]*g.atr_time and cash>300):
-#             log.info(security+ g.last_month + ":月定投，买入金额 %.2f" % (1200))
-#             order_value(security, 1200)
-#             g.trade_per_month_flag[security] = "Y"
+def buy_per_month(security,current_price,cost_basis,profit_ratio,profit_value,context):
+    # 得到当天的时间,
+    current_date = context.blotter.current_dt
+    cash = context.portfolio.cash
+
+    # 如果当天是月初，开始定投
+    if g.trade_per_month_flag[security] =="N" and (g.last_month is None or str(current_date)[:-12] > g.last_month):
+        g.last_month = str(current_date)[:-12]
+        # 现价<成本价-1ATR，加仓200
+        if (cost_basis-current_price >= g.atr_dict[security]*g.atr_time and cash>300):
+            log.info(security+ g.last_month + ":月定投，买入金额 %.2f" % (1200))
+            order_value(security, 1200)
+            g.trade_per_month_flag[security] = "Y"
 
 def cal_atr(security):
     h = get_history(g.atr_period+1, '1d', field=['close', 'high', 'low'], security_list=security, fq='dypre', include=True)
