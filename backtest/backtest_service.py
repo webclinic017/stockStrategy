@@ -20,15 +20,15 @@ def back_test_service(stock):
     # Create a cerebro entity
     cerebro = bt.Cerebro()
     # # Add a backtest-TurtleStrategy
-    # cerebro.addstrategy(TurtleStrategy)
-    # cerebro.addsizer(TurtleSizer)
+    cerebro.addstrategy(TurtleStrategy)
+    cerebro.addsizer(TurtleSizer)
     # Add a backtest-GRID
 
 
     dt=dt_loader.load_data(stock.code)
 
 
-    cerebro.addstrategy(GridTradingStrategy,code=stock.name,indicator=stock.indicator)
+    # cerebro.addstrategy(GridTradingStrategy,code=stock.name,indicator=stock.indicator)
     # 当日下单，当日收盘价成交
 
     # Datas are in a subfolder of the samples. Need to find where the script is

@@ -9,8 +9,6 @@ import pickle
 import datetime as dt
 
 def initialize(context):
-    g.sw_one = ['512480.SS', '560880.SS', '517090.SS', '512880.SS', '510310.SS', '159952.SZ', '512680.SS',
-                  '513100.SS']
     # 初始化此策略
     g.is_trade_flag = is_trade()
     if g.is_trade_flag:

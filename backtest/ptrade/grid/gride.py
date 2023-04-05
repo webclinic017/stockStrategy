@@ -74,18 +74,19 @@ def before_trading_start(context, data):
 def init_grid(context):
     sec_grid_df = pd.read_csv(g.path)
     for sec in g.security:
-        grid_deque = g.grid_price_deque_dict[sec]
-        before_grid = sec_grid_df.loc[sec_grid_df["code"]==sec,"grid"]
-        if len(before_grid)>0:
-            before_grid_value_list = str(before_grid.iloc[0]).split(",")
-            for grid in before_grid_value_list:
-                grid_deque.append(float(grid))
-            g.have_init_grid[sec] = True
-        if sec in context.portfolio.positions:
-            sec_position = context.portfolio.positions[sec]
-            if sec_position.amount > 0 and g.have_init_grid[sec] is False:
-                grid_deque.appendleft(sec_position.cost_basis)
+        if g.have_init_grid[sec] is False:
+            grid_deque = g.grid_price_deque_dict[sec]
+            before_grid = sec_grid_df.loc[sec_grid_df["code"]==sec,"grid"]
+            if len(before_grid)>0:
+                before_grid_value_list = str(before_grid.iloc[0]).split(",")
+                for grid in before_grid_value_list:
+                    grid_deque.append(float(grid))
                 g.have_init_grid[sec] = True
+            if sec in context.portfolio.positions and g.have_init_grid[sec] is False:
+                sec_position = context.portfolio.positions[sec]
+                if sec_position.amount > 0 :
+                    grid_deque.appendleft(sec_position.cost_basis)
+                    g.have_init_grid[sec] = True
         log.info("初始化网格, code:%s,grid:%s"%(sec,str(grid_deque)))
 
 # 网格及交易
@@ -93,19 +94,19 @@ def handle_data(context, data):
     for security in g.security:
         trade(security,context, data)
 
-def on_trade_response (context, trade_list):
-    logging.info("网格买入成功:"+str(trade_list))
-    for trade in trade_list:
-        if trade.status == "8" or trade.status == "7":
-            grid_price_deque = g.grid_price_deque_dict[trade["stock_code"]]
-            # 买
-            if trade["entrust_bs"]=="1":
-                grid_price_deque.appendleft(trade["business_price"])
-            # 卖
-            if trade["entrust_bs"]=="2":
-                grid_price_deque.popleft()
-                if len(grid_price_deque) == 0:
-                    grid_price_deque.appendleft(trade["business_price"])
+# def on_trade_response (context, trade_list):
+#     logging.info("网格买入成功:"+str(trade_list))
+#     for trade in trade_list:
+#         if trade.status == "8" or trade.status == "7":
+#             grid_price_deque = g.grid_price_deque_dict[trade["stock_code"]]
+#             # 买
+#             if trade["entrust_bs"]=="1":
+#                 grid_price_deque.appendleft(trade["business_price"])
+#             # 卖
+#             if trade["entrust_bs"]=="2":
+#                 grid_price_deque.popleft()
+#                 if len(grid_price_deque) == 0:
+#                     grid_price_deque.appendleft(trade["business_price"])
 
 
 
@@ -127,18 +128,18 @@ def trade(security,context, data):
             buy_per_month(security,current_price,position.cost_basis,profit_ratio,profit_value,context)
             grid_trade(security,profit_ratio,profit_value,current_price,context)
 
-# def after_trading_end(context, data):
-#     grid_list=[]
-#     for sec in g.grid_price_deque_dict.keys():
-#         dic={}
-#         dic["code"]=sec
-#         list = []
-#         for ele in g.grid_price_deque_dict[sec]:
-#             list.append(str(ele))
-#         dic["grid"]=",".join(list)
-#         grid_list.append(dic)
-#     pf = pd.DataFrame(grid_list, columns=["code", "grid"])
-#     pf.to_csv(g.path, index=False)
+def after_trading_end(context, data):
+    grid_list=[]
+    for sec in g.grid_price_deque_dict.keys():
+        dic={}
+        dic["code"]=sec
+        list = []
+        for ele in g.grid_price_deque_dict[sec]:
+            list.append(str(ele))
+        dic["grid"]=",".join(list)
+        grid_list.append(dic)
+    pf = pd.DataFrame(grid_list, columns=["code", "grid"])
+    pf.to_csv(g.path, index=False)
 
 # 开仓逻辑
 def open_trading(current_price,security,context, data):
