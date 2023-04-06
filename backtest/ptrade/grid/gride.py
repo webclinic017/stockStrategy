@@ -74,8 +74,8 @@ def before_trading_start(context, data):
 def init_grid(context):
     sec_grid_df = pd.read_csv(g.path)
     for sec in g.security:
+        grid_deque = g.grid_price_deque_dict[sec]
         if g.have_init_grid[sec] is False:
-            grid_deque = g.grid_price_deque_dict[sec]
             before_grid = sec_grid_df.loc[sec_grid_df["code"]==sec,"grid"]
             if len(before_grid)>0:
                 before_grid_value_list = str(before_grid.iloc[0]).split(",")

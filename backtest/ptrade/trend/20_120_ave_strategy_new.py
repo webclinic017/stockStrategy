@@ -51,7 +51,7 @@ def after_trading_end(context, data):
         # log.info(today_stock)
         sec_list[ts_code] = select_shares(today_stock["con_ts_code"].values)
     log.info(sec_list)
-    # send_email('805784078@qq.com', ['805784078@qq.com'], 'wcavijswtjvdbedc', info='明天关注的股票池信息:'+str(sec_list))
+    send_email('805784078@qq.com', ['805784078@qq.com','1204597411@qq.com'], 'wcavijswtjvdbedc', info='明天关注的股票池信息:'+str(sec_list))
 
 
 def select_shares(stock_list):
